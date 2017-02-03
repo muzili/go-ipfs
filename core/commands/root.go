@@ -47,6 +47,7 @@ ADVANCED COMMANDS
   repo          Manipulate the IPFS repository
   stats         Various operational stats
   key           Create and manipulate keypairs
+  filestore     Manage the filestore (experimental)
 
 NETWORK COMMANDS
   id            Show info about IPFS peers
@@ -124,6 +125,7 @@ var rootSubcommands = map[string]*cmds.Command{
 	"update":    ExternalBinary(),
 	"version":   VersionCmd,
 	"bitswap":   BitswapCmd,
+	"filestore": FileStoreCmd,
 }
 
 // RootRO is the readonly version of Root
