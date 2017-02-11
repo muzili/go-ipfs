@@ -21,6 +21,7 @@ import (
 	dag "github.com/ipfs/go-ipfs/merkledag"
 	mfs "github.com/ipfs/go-ipfs/mfs"
 	"github.com/ipfs/go-ipfs/pin"
+	posinfo "github.com/ipfs/go-ipfs/thirdparty/posinfo"
 	unixfs "github.com/ipfs/go-ipfs/unixfs"
 
 	node "gx/ipfs/QmRSU5EqqWVZSNdbU51yXmVoF1uNw3JgTNB6RaiL7DZM16/go-ipld-node"
@@ -345,6 +346,10 @@ func (adder *Adder) addNode(node node.Node, path string) error {
 	// patch it into the root
 	if path == "" {
 		path = node.Cid().String()
+	}
+
+	if pi, ok := node.(*posinfo.FilestoreNode); ok {
+		node = pi.Node
 	}
 
 	dir := gopath.Dir(path)
