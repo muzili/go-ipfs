@@ -3,15 +3,16 @@ package commands
 import (
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/ipfs/go-ipfs/core/coreunix"
 	"gx/ipfs/QmeWjRodbcZFKe5tMN7poEx3izym6osrLSnTLf9UjJZBbs/pb"
 
+	"github.com/ipfs/go-ipfs-cmds"
 	"github.com/ipfs/go-ipfs-cmds/cmdsutil"
 	"github.com/ipfs/go-ipfs-cmds/files"
 
 	blockservice "github.com/ipfs/go-ipfs/blockservice"
-	cmds "github.com/ipfs/go-ipfs/commands"
 	core "github.com/ipfs/go-ipfs/core"
 	offline "github.com/ipfs/go-ipfs/exchange/offline"
 	dag "github.com/ipfs/go-ipfs/merkledag"
@@ -119,10 +120,10 @@ You can now refer to the added file in a gateway, like so:
 
 		return nil
 	},
-	Run: func(req cmds.Request, res cmds.Response) {
+	Run: func(req cmds.Request, re cmds.ResponseEmitter) {
 		n, err := req.InvocContext().GetNode()
 		if err != nil {
-			res.SetError(err, cmdsutil.ErrNormal)
+			re.SetError(err, cmdsutil.ErrNormal)
 			return
 		}
 		// check if repo will exceed storage limit if added
@@ -150,7 +151,7 @@ You can now refer to the added file in a gateway, like so:
 				NilRepo: true,
 			})
 			if err != nil {
-				res.SetError(err, cmdsutil.ErrNormal)
+				re.SetError(err, cmdsutil.ErrNormal)
 				return
 			}
 			n = nilnode
@@ -165,11 +166,10 @@ You can now refer to the added file in a gateway, like so:
 		}
 
 		outChan := make(chan interface{}, 8)
-		res.SetOutput((<-chan interface{})(outChan))
 
 		fileAdder, err := coreunix.NewAdder(req.Context(), n.Pinning, n.Blockstore, dserv)
 		if err != nil {
-			res.SetError(err, cmdsutil.ErrNormal)
+			re.SetError(err, cmdsutil.ErrNormal)
 			return
 		}
 
@@ -187,7 +187,7 @@ You can now refer to the added file in a gateway, like so:
 			md := dagtest.Mock()
 			mr, err := mfs.NewRoot(req.Context(), md, ft.EmptyDirNode(), nil)
 			if err != nil {
-				res.SetError(err, cmdsutil.ErrNormal)
+				re.SetError(err, cmdsutil.ErrNormal)
 				return
 			}
 
@@ -227,107 +227,130 @@ You can now refer to the added file in a gateway, like so:
 		go func() {
 			defer close(outChan)
 			if err := addAllAndPin(req.Files()); err != nil {
-				res.SetError(err, cmdsutil.ErrNormal)
-				return
+				re.SetError(err, cmdsutil.ErrNormal)
 			}
+		}()
 
+		go func() {
+			for v := range outChan {
+				err := re.Emit(v)
+				if err != nil {
+					re.SetError(err, cmdsutil.ErrNormal)
+				}
+			}
 		}()
 	},
-	PostRun: func(req cmds.Request, res cmds.Response) {
-		if res.Error() != nil {
-			return
-		}
-		outChan, ok := res.Output().(<-chan interface{})
-		if !ok {
-			res.SetError(u.ErrCast(), cmdsutil.ErrNormal)
-			return
-		}
-		res.SetOutput(nil)
-
-		quiet, _, err := req.Option("quiet").Bool()
-		if err != nil {
-			res.SetError(u.ErrCast(), cmdsutil.ErrNormal)
-			return
-		}
-
-		progress, _, err := req.Option(progressOptionName).Bool()
-		if err != nil {
-			res.SetError(u.ErrCast(), cmdsutil.ErrNormal)
-			return
-		}
-
-		var bar *pb.ProgressBar
-		if progress {
-			bar = pb.New64(0).SetUnits(pb.U_BYTES)
-			bar.ManualUpdate = true
-			bar.ShowTimeLeft = false
-			bar.ShowPercent = false
-			bar.Output = res.Stderr()
-			bar.Start()
-		}
-
-		var sizeChan chan int64
-		s, found := req.Values()["size"]
-		if found {
-			sizeChan = s.(chan int64)
-		}
-
-		lastFile := ""
-		var totalProgress, prevFiles, lastBytes int64
-
-	LOOP:
-		for {
-			select {
-			case out, ok := <-outChan:
-				if !ok {
-					break LOOP
-				}
-				output := out.(*coreunix.AddedObject)
-				if len(output.Hash) > 0 {
-					if progress {
-						// clear progress bar line before we print "added x" output
-						fmt.Fprintf(res.Stderr(), "\033[2K\r")
-					}
-					if quiet {
-						fmt.Fprintf(res.Stdout(), "%s\n", output.Hash)
-					} else {
-						fmt.Fprintf(res.Stdout(), "added %s %s\n", output.Hash, output.Name)
-					}
-
-				} else {
-					log.Debugf("add progress: %v %v\n", output.Name, output.Bytes)
-
-					if !progress {
-						continue
-					}
-
-					if len(lastFile) == 0 {
-						lastFile = output.Name
-					}
-					if output.Name != lastFile || output.Bytes < lastBytes {
-						prevFiles += lastBytes
-						lastFile = output.Name
-					}
-					lastBytes = output.Bytes
-					delta := prevFiles + lastBytes - totalProgress
-					totalProgress = bar.Add64(delta)
-				}
-
-				if progress {
-					bar.Update()
-				}
-			case size := <-sizeChan:
-				if progress {
-					bar.Total = size
-					bar.ShowPercent = true
-					bar.ShowBar = true
-					bar.ShowTimeLeft = true
-				}
-			case <-req.Context().Done():
-				res.SetError(req.Context().Err(), cmdsutil.ErrNormal)
-				return
+	PostRun: map[cmds.EncodingType]func(cmds.Request, cmds.Response) cmds.Response{
+		cmds.CLI: func(req cmds.Request, res cmds.Response) cmds.Response {
+			if res.Error() != nil {
+				return res
 			}
-		}
+
+			re, res_ := cmds.NewChanResponsePair(req)
+
+			outChan := make(chan interface{})
+
+			go func() {
+				defer close(outChan)
+
+				for {
+					v, err := res.Next()
+					if err != nil {
+						re.SetError(err, cmdsutil.ErrNormal)
+						return
+					}
+
+					outChan <- v
+				}
+			}()
+
+			quiet, _, err := req.Option("quiet").Bool()
+			if err != nil {
+				re.SetError(u.ErrCast(), cmdsutil.ErrNormal)
+				return res_
+			}
+
+			progress, _, err := req.Option(progressOptionName).Bool()
+			if err != nil {
+				re.SetError(u.ErrCast(), cmdsutil.ErrNormal)
+				return res_
+			}
+
+			var bar *pb.ProgressBar
+			if progress {
+				bar = pb.New64(0).SetUnits(pb.U_BYTES)
+				bar.ManualUpdate = true
+				bar.ShowTimeLeft = false
+				bar.ShowPercent = false
+				bar.Output = os.Stderr
+				bar.Start()
+			}
+
+			var sizeChan chan int64
+			s, found := req.Values()["size"]
+			if found {
+				sizeChan = s.(chan int64)
+			}
+
+			lastFile := ""
+			var totalProgress, prevFiles, lastBytes int64
+
+		LOOP:
+			for {
+				select {
+				case out, ok := <-outChan:
+					if !ok {
+						break LOOP
+					}
+					output := out.(*coreunix.AddedObject)
+					if len(output.Hash) > 0 {
+						if progress {
+							// clear progress bar line before we print "added x" output
+							fmt.Fprintf(os.Stderr, "\033[2K\r")
+						}
+						if quiet {
+							fmt.Fprintf(os.Stdout, "%s\n", output.Hash)
+						} else {
+							fmt.Fprintf(os.Stdout, "added %s %s\n", output.Hash, output.Name)
+						}
+
+					} else {
+						log.Debugf("add progress: %v %v\n", output.Name, output.Bytes)
+
+						if !progress {
+							continue
+						}
+
+						if len(lastFile) == 0 {
+							lastFile = output.Name
+						}
+						if output.Name != lastFile || output.Bytes < lastBytes {
+							prevFiles += lastBytes
+							lastFile = output.Name
+						}
+						lastBytes = output.Bytes
+						delta := prevFiles + lastBytes - totalProgress
+						totalProgress = bar.Add64(delta)
+					}
+
+					if progress {
+						bar.Update()
+					}
+				case size := <-sizeChan:
+					if progress {
+						bar.Total = size
+						bar.ShowPercent = true
+						bar.ShowBar = true
+						bar.ShowTimeLeft = true
+					}
+				case <-req.Context().Done():
+					re.SetError(req.Context().Err(), cmdsutil.ErrNormal)
+					return res_
+				}
+			}
+
+			return res_
+		},
 	},
 	Type: coreunix.AddedObject{},
 }

@@ -11,8 +11,8 @@ import (
 
 	"gx/ipfs/QmeWjRodbcZFKe5tMN7poEx3izym6osrLSnTLf9UjJZBbs/pb"
 
+	"github.com/ipfs/go-ipfs-cmds"
 	"github.com/ipfs/go-ipfs-cmds/cmdsutil"
-	cmds "github.com/ipfs/go-ipfs/commands"
 	core "github.com/ipfs/go-ipfs/core"
 	dag "github.com/ipfs/go-ipfs/merkledag"
 	path "github.com/ipfs/go-ipfs/path"
@@ -51,81 +51,89 @@ may also specify the level of compression by specifying '-l=<1-9>'.
 		_, err := getCompressOptions(req)
 		return err
 	},
-	Run: func(req cmds.Request, res cmds.Response) {
+	Run: func(req cmds.Request, re cmds.ResponseEmitter) {
 		cmplvl, err := getCompressOptions(req)
 		if err != nil {
-			res.SetError(err, cmdsutil.ErrClient)
+			re.SetError(err, cmdsutil.ErrClient)
 			return
 		}
 
 		node, err := req.InvocContext().GetNode()
 		if err != nil {
-			res.SetError(err, cmdsutil.ErrNormal)
+			re.SetError(err, cmdsutil.ErrNormal)
 			return
 		}
 		p := path.Path(req.Arguments()[0])
 		ctx := req.Context()
 		dn, err := core.Resolve(ctx, node.Namesys, node.Resolver, p)
 		if err != nil {
-			res.SetError(err, cmdsutil.ErrNormal)
+			re.SetError(err, cmdsutil.ErrNormal)
 			return
 		}
 
 		pbnd, ok := dn.(*dag.ProtoNode)
 		if !ok {
-			res.SetError(err, cmdsutil.ErrNormal)
+			re.SetError(err, cmdsutil.ErrNormal)
 			return
 		}
 
 		size, err := dn.Size()
 		if err != nil {
-			res.SetError(err, cmdsutil.ErrNormal)
+			re.SetError(err, cmdsutil.ErrNormal)
 			return
 		}
 
-		res.SetLength(size)
+		re.SetLength(size)
 
 		archive, _, _ := req.Option("archive").Bool()
 		reader, err := uarchive.DagArchive(ctx, pbnd, p.String(), node.DAG, archive, cmplvl)
 		if err != nil {
-			res.SetError(err, cmdsutil.ErrNormal)
+			re.SetError(err, cmdsutil.ErrNormal)
 			return
 		}
-		res.SetOutput(reader)
+
+		re.Emit(reader)
 	},
-	PostRun: func(req cmds.Request, res cmds.Response) {
-		if res.Output() == nil {
-			return
-		}
-		outReader := res.Output().(io.Reader)
-		res.SetOutput(nil)
+	PostRun: map[cmds.EncodingType]func(cmds.Request, cmds.Response) cmds.Response{
+		cmds.CLI: func(req cmds.Request, res cmds.Response) cmds.Response {
+			re, res_ := cmds.NewChanResponsePair(req)
 
-		outPath, _, _ := req.Option("output").String()
-		if len(outPath) == 0 {
-			_, outPath = gopath.Split(req.Arguments()[0])
-			outPath = gopath.Clean(outPath)
-		}
+			v, err := res.Next()
+			if err != nil {
+				re.SetError(err, cmdsutil.ErrNormal)
+				return res_
+			}
 
-		cmplvl, err := getCompressOptions(req)
-		if err != nil {
-			res.SetError(err, cmdsutil.ErrClient)
-			return
-		}
+			outReader := v.(io.Reader)
 
-		archive, _, _ := req.Option("archive").Bool()
+			outPath, _, _ := req.Option("output").String()
+			if len(outPath) == 0 {
+				_, outPath = gopath.Split(req.Arguments()[0])
+				outPath = gopath.Clean(outPath)
+			}
 
-		gw := getWriter{
-			Out:         os.Stdout,
-			Err:         os.Stderr,
-			Archive:     archive,
-			Compression: cmplvl,
-			Size:        int64(res.Length()),
-		}
+			cmplvl, err := getCompressOptions(req)
+			if err != nil {
+				re.SetError(err, cmdsutil.ErrClient)
+				return res_
+			}
 
-		if err := gw.Write(outReader, outPath); err != nil {
-			res.SetError(err, cmdsutil.ErrNormal)
-			return
-		}
+			archive, _, _ := req.Option("archive").Bool()
+
+			gw := getWriter{
+				Out:         os.Stdout,
+				Err:         os.Stderr,
+				Archive:     archive,
+				Compression: cmplvl,
+				Size:        int64(res.Length()),
+			}
+
+			if err := gw.Write(outReader, outPath); err != nil {
+				re.SetError(err, cmdsutil.ErrNormal)
+			}
+
+			return res_
+		},
 	},
 }
 

@@ -13,7 +13,7 @@ import (
 
 	"github.com/ipfs/go-ipfs-cmds/cmdsutil"
 
-	cmds "github.com/ipfs/go-ipfs/commands"
+	cmds "github.com/ipfs/go-ipfs-cmds"
 	"github.com/ipfs/go-ipfs/core"
 	commands "github.com/ipfs/go-ipfs/core/commands"
 	corehttp "github.com/ipfs/go-ipfs/core/corehttp"
@@ -186,7 +186,7 @@ func defaultMux(path string) corehttp.ServeOption {
 
 var fileDescriptorCheck = func() error { return nil }
 
-func daemonFunc(req cmds.Request, res cmds.Response) {
+func daemonFunc(req cmds.Request, re cmds.ResponseEmitter) {
 	// Inject metrics before we do anything
 
 	err := mprome.Inject()
@@ -226,7 +226,7 @@ func daemonFunc(req cmds.Request, res cmds.Response) {
 	// running in an uninitialized state.
 	initialize, _, err := req.Option(initOptionKwd).Bool()
 	if err != nil {
-		res.SetError(err, cmdsutil.ErrNormal)
+		re.SetError(err, cmdsutil.ErrNormal)
 		return
 	}
 
@@ -239,7 +239,7 @@ func daemonFunc(req cmds.Request, res cmds.Response) {
 		if !util.FileExists(req.InvocContext().ConfigRoot) {
 			err := initWithDefaults(os.Stdout, req.InvocContext().ConfigRoot)
 			if err != nil {
-				res.SetError(err, cmdsutil.ErrNormal)
+				re.SetError(err, cmdsutil.ErrNormal)
 				return
 			}
 		}
@@ -250,7 +250,7 @@ func daemonFunc(req cmds.Request, res cmds.Response) {
 	repo, err := fsrepo.Open(req.InvocContext().ConfigRoot)
 	switch err {
 	default:
-		res.SetError(err, cmdsutil.ErrNormal)
+		re.SetError(err, cmdsutil.ErrNormal)
 		return
 	case fsrepo.ErrNeedMigration:
 		domigrate, found, _ := req.Option(migrateKwd).Bool()
@@ -263,7 +263,7 @@ func daemonFunc(req cmds.Request, res cmds.Response) {
 		if !domigrate {
 			fmt.Println("Not running migrations of fs-repo now.")
 			fmt.Println("Please get fs-repo-migrations from https://dist.ipfs.io")
-			res.SetError(fmt.Errorf("fs-repo requires migration"), cmdsutil.ErrNormal)
+			re.SetError(fmt.Errorf("fs-repo requires migration"), cmdsutil.ErrNormal)
 			return
 		}
 
@@ -273,13 +273,13 @@ func daemonFunc(req cmds.Request, res cmds.Response) {
 			fmt.Printf("  %s\n", err)
 			fmt.Println("If you think this is a bug, please file an issue and include this whole log output.")
 			fmt.Println("  https://github.com/ipfs/fs-repo-migrations")
-			res.SetError(err, cmdsutil.ErrNormal)
+			re.SetError(err, cmdsutil.ErrNormal)
 			return
 		}
 
 		repo, err = fsrepo.Open(req.InvocContext().ConfigRoot)
 		if err != nil {
-			res.SetError(err, cmdsutil.ErrNormal)
+			re.SetError(err, cmdsutil.ErrNormal)
 			return
 		}
 	case nil:
@@ -288,7 +288,7 @@ func daemonFunc(req cmds.Request, res cmds.Response) {
 
 	cfg, err := ctx.GetConfig()
 	if err != nil {
-		res.SetError(err, cmdsutil.ErrNormal)
+		re.SetError(err, cmdsutil.ErrNormal)
 		return
 	}
 
@@ -310,14 +310,14 @@ func daemonFunc(req cmds.Request, res cmds.Response) {
 
 	routingOption, _, err := req.Option(routingOptionKwd).String()
 	if err != nil {
-		res.SetError(err, cmdsutil.ErrNormal)
+		re.SetError(err, cmdsutil.ErrNormal)
 		return
 	}
 	switch routingOption {
 	case routingOptionSupernodeKwd:
 		servers, err := cfg.SupernodeRouting.ServerIPFSAddrs()
 		if err != nil {
-			res.SetError(err, cmdsutil.ErrNormal)
+			re.SetError(err, cmdsutil.ErrNormal)
 			repo.Close() // because ownership hasn't been transferred to the node
 			return
 		}
@@ -337,14 +337,14 @@ func daemonFunc(req cmds.Request, res cmds.Response) {
 	case routingOptionNoneKwd:
 		ncfg.Routing = core.NilRouterOption
 	default:
-		res.SetError(fmt.Errorf("unrecognized routing option: %s", routingOption), cmdsutil.ErrNormal)
+		re.SetError(fmt.Errorf("unrecognized routing option: %s", routingOption), cmdsutil.ErrNormal)
 		return
 	}
 
 	node, err := core.NewNode(req.Context(), ncfg)
 	if err != nil {
 		log.Error("error from node construction: ", err)
-		res.SetError(err, cmdsutil.ErrNormal)
+		re.SetError(err, cmdsutil.ErrNormal)
 		return
 	}
 	node.SetLocal(false)
@@ -370,7 +370,7 @@ func daemonFunc(req cmds.Request, res cmds.Response) {
 	// construct api endpoint - every time
 	err, apiErrc := serveHTTPApi(req)
 	if err != nil {
-		res.SetError(err, cmdsutil.ErrNormal)
+		re.SetError(err, cmdsutil.ErrNormal)
 		return
 	}
 
@@ -380,7 +380,7 @@ func daemonFunc(req cmds.Request, res cmds.Response) {
 		var err error
 		err, gwErrc = serveHTTPGateway(req)
 		if err != nil {
-			res.SetError(err, cmdsutil.ErrNormal)
+			re.SetError(err, cmdsutil.ErrNormal)
 			return
 		}
 	}
@@ -388,17 +388,17 @@ func daemonFunc(req cmds.Request, res cmds.Response) {
 	// construct fuse mountpoints - if the user provided the --mount flag
 	mount, _, err := req.Option(mountKwd).Bool()
 	if err != nil {
-		res.SetError(err, cmdsutil.ErrNormal)
+		re.SetError(err, cmdsutil.ErrNormal)
 		return
 	}
 	if mount && offline {
-		res.SetError(errors.New("mount is not currently supported in offline mode"),
+		re.SetError(errors.New("mount is not currently supported in offline mode"),
 			cmdsutil.ErrClient)
 		return
 	}
 	if mount {
 		if err := mountFuse(req); err != nil {
-			res.SetError(err, cmdsutil.ErrNormal)
+			re.SetError(err, cmdsutil.ErrNormal)
 			return
 		}
 	}
@@ -406,7 +406,7 @@ func daemonFunc(req cmds.Request, res cmds.Response) {
 	// repo blockstore GC - if --enable-gc flag is present
 	err, gcErrc := maybeRunGC(req, node)
 	if err != nil {
-		res.SetError(err, cmdsutil.ErrNormal)
+		re.SetError(err, cmdsutil.ErrNormal)
 		return
 	}
 
@@ -419,7 +419,7 @@ func daemonFunc(req cmds.Request, res cmds.Response) {
 	for err := range merge(apiErrc, gwErrc, gcErrc) {
 		if err != nil {
 			log.Error(err)
-			res.SetError(err, cmdsutil.ErrNormal)
+			re.SetError(err, cmdsutil.ErrNormal)
 		}
 	}
 	return

@@ -237,7 +237,12 @@ var bootstrapRemoveCmd = &cmds.Command{
 	Type: BootstrapOutput{},
 	Marshalers: cmds.MarshalerMap{
 		cmds.Text: func(res cmds.Response) (io.Reader, error) {
-			v, ok := res.Output().(*BootstrapOutput)
+			ch, ok := res.Output().(chan interface{})
+			if !ok {
+				return nil, u.ErrCast()
+			}
+
+			v, ok := (<-ch).(*BootstrapOutput)
 			if !ok {
 				return nil, u.ErrCast()
 			}

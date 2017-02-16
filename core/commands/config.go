@@ -105,8 +105,18 @@ Set the value of the 'Datastore.Path' key:
 	},
 	Marshalers: cmds.MarshalerMap{
 		cmds.Text: func(res cmds.Response) (io.Reader, error) {
+			log.Debug("res:", res)
+			log.Debug("res.Request():", res.Request())
+			log.Debug("res.Request().Arguments():", res.Request().Arguments())
 			if len(res.Request().Arguments()) == 2 {
 				return nil, nil // dont output anything
+			}
+
+			log.Debugf("cfg txt mrshlr:   v=%v", res.Output())
+			log.Debugf("cfg txt mrshlr: err=%v", res.Error())
+
+			if res.Error() != nil {
+				return nil, res.Error()
 			}
 
 			v := res.Output()
@@ -114,7 +124,13 @@ Set the value of the 'Datastore.Path' key:
 				k := res.Request().Arguments()[0]
 				return nil, fmt.Errorf("config does not contain key: %s", k)
 			}
-			vf, ok := v.(*ConfigField)
+
+			ch, ok := v.(chan interface{})
+			if !ok {
+				return nil, u.ErrCast()
+			}
+
+			vf, ok := (<-ch).(*ConfigField)
 			if !ok {
 				return nil, u.ErrCast()
 			}

@@ -117,7 +117,13 @@ EXAMPLE:
 	},
 	Marshalers: cmds.MarshalerMap{
 		cmds.Text: func(res cmds.Response) (io.Reader, error) {
-			val, ok := res.Output().(*IdOutput)
+			ch, ok := res.Output().(chan interface{})
+			if !ok {
+				log.Debugf("received type %T", res.Output())
+				return nil, u.ErrCast()
+			}
+
+			val, ok := (<-ch).(*IdOutput)
 			if !ok {
 				return nil, u.ErrCast()
 			}

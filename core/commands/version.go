@@ -43,7 +43,16 @@ var VersionCmd = &cmds.Command{
 	},
 	Marshalers: cmds.MarshalerMap{
 		cmds.Text: func(res cmds.Response) (io.Reader, error) {
-			v := res.Output().(*VersionOutput)
+			ch, ok := res.Output().(chan interface{})
+			if !ok {
+				return nil, fmt.Errorf("cast error. got %T, expected chan interface{}", res)
+			}
+
+			out := <-ch
+			v, ok := out.(*VersionOutput)
+			if !ok {
+				return nil, fmt.Errorf("cast error. got %T, expected *VersionOutput", out)
+			}
 
 			repo, _, err := res.Request().Option("repo").Bool()
 			if err != nil {

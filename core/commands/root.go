@@ -4,12 +4,15 @@ import (
 	"io"
 	"strings"
 
+	"github.com/ipfs/go-ipfs-cmds"
 	"github.com/ipfs/go-ipfs-cmds/cmdsutil"
-	cmds "github.com/ipfs/go-ipfs/commands"
+	oldcmds "github.com/ipfs/go-ipfs/commands"
+
 	dag "github.com/ipfs/go-ipfs/core/commands/dag"
 	files "github.com/ipfs/go-ipfs/core/commands/files"
 	ocmd "github.com/ipfs/go-ipfs/core/commands/object"
 	unixfs "github.com/ipfs/go-ipfs/core/commands/unixfs"
+
 	logging "gx/ipfs/QmSpJByNKFX1sCsHBEp3R73FL4NF6FnQTEGyNAXHm2GS52/go-log"
 )
 
@@ -92,18 +95,21 @@ The CLI will exit with one of the following values:
 var CommandsDaemonCmd = CommandsCmd(Root)
 
 var rootSubcommands = map[string]*cmds.Command{
-	"add":       AddCmd,
-	"block":     BlockCmd,
+	"add":      AddCmd,
+	"block":    BlockCmd,
+	"cat":      CatCmd,
+	"commands": CommandsDaemonCmd,
+	"get":      GetCmd,
+}
+
+var rootOldSubcommands = map[string]*oldcmds.Command{
 	"bootstrap": BootstrapCmd,
-	"cat":       CatCmd,
-	"commands":  CommandsDaemonCmd,
 	"config":    ConfigCmd,
 	"dag":       dag.DagCmd,
 	"dht":       DhtCmd,
 	"diag":      DiagCmd,
 	"dns":       DNSCmd,
 	"files":     files.FilesCmd,
-	"get":       GetCmd,
 	"id":        IDCmd,
 	"key":       KeyCmd,
 	"log":       LogCmd,
@@ -132,27 +138,30 @@ var RootRO = &cmds.Command{}
 
 var CommandsDaemonROCmd = CommandsCmd(RootRO)
 
-var RefsROCmd = &cmds.Command{}
+var RefsROCmd = &oldcmds.Command{}
 
 var rootROSubcommands = map[string]*cmds.Command{
+	"commands": CommandsDaemonROCmd,
+	"cat":      CatCmd,
 	"block": &cmds.Command{
 		Subcommands: map[string]*cmds.Command{
 			"stat": blockStatCmd,
 			"get":  blockGetCmd,
 		},
 	},
-	"cat":      CatCmd,
-	"commands": CommandsDaemonROCmd,
-	"dns":      DNSCmd,
-	"get":      GetCmd,
-	"ls":       LsCmd,
-	"name": &cmds.Command{
-		Subcommands: map[string]*cmds.Command{
+	"get": GetCmd,
+}
+
+var rootROOldSubcommands = map[string]*oldcmds.Command{
+	"dns": DNSCmd,
+	"ls":  LsCmd,
+	"name": &oldcmds.Command{
+		Subcommands: map[string]*oldcmds.Command{
 			"resolve": IpnsCmd,
 		},
 	},
-	"object": &cmds.Command{
-		Subcommands: map[string]*cmds.Command{
+	"object": &oldcmds.Command{
+		Subcommands: map[string]*oldcmds.Command{
 			"data":  ocmd.ObjectDataCmd,
 			"links": ocmd.ObjectLinksCmd,
 			"get":   ocmd.ObjectGetCmd,
@@ -160,8 +169,8 @@ var rootROSubcommands = map[string]*cmds.Command{
 			"patch": ocmd.ObjectPatchCmd,
 		},
 	},
-	"dag": &cmds.Command{
-		Subcommands: map[string]*cmds.Command{
+	"dag": &oldcmds.Command{
+		Subcommands: map[string]*oldcmds.Command{
 			"get": dag.DagGetCmd,
 		},
 	},
@@ -176,9 +185,12 @@ func init() {
 
 	// sanitize readonly refs command
 	*RefsROCmd = *RefsCmd
-	RefsROCmd.Subcommands = map[string]*cmds.Command{}
+	RefsROCmd.Subcommands = map[string]*oldcmds.Command{}
 
+	Root.OldSubcommands = rootOldSubcommands
 	Root.Subcommands = rootSubcommands
+
+	RootRO.OldSubcommands = rootROOldSubcommands
 	RootRO.Subcommands = rootROSubcommands
 }
 
@@ -186,6 +198,6 @@ type MessageOutput struct {
 	Message string
 }
 
-func MessageTextMarshaler(res cmds.Response) (io.Reader, error) {
+func MessageTextMarshaler(res oldcmds.Response) (io.Reader, error) {
 	return strings.NewReader(res.Output().(*MessageOutput).Message), nil
 }

@@ -2,9 +2,10 @@ package commands
 
 import (
 	"io"
+	"os"
 
+	cmds "github.com/ipfs/go-ipfs-cmds"
 	"github.com/ipfs/go-ipfs-cmds/cmdsutil"
-	cmds "github.com/ipfs/go-ipfs/commands"
 	core "github.com/ipfs/go-ipfs/core"
 	coreunix "github.com/ipfs/go-ipfs/core/coreunix"
 
@@ -22,23 +23,26 @@ var CatCmd = &cmds.Command{
 	Arguments: []cmdsutil.Argument{
 		cmdsutil.StringArg("ipfs-path", true, true, "The path to the IPFS object(s) to be outputted.").EnableStdin(),
 	},
-	Run: func(req cmds.Request, res cmds.Response) {
+	Run: func(req cmds.Request, re cmds.ResponseEmitter) {
+		log.Debugf("cat: RespEm type is %T", re)
 		node, err := req.InvocContext().GetNode()
 		if err != nil {
-			res.SetError(err, cmdsutil.ErrNormal)
+			re.SetError(err, cmdsutil.ErrNormal)
 			return
 		}
 
 		if !node.OnlineMode() {
 			if err := node.SetupOfflineRouting(); err != nil {
-				res.SetError(err, cmdsutil.ErrNormal)
+				re.SetError(err, cmdsutil.ErrNormal)
 				return
 			}
 		}
 
 		readers, length, err := cat(req.Context(), node, req.Arguments())
+		log.Debug("cat returned ", err)
+
 		if err != nil {
-			res.SetError(err, cmdsutil.ErrNormal)
+			re.SetError(err, cmdsutil.ErrNormal)
 			return
 		}
 
@@ -49,20 +53,37 @@ var CatCmd = &cmds.Command{
 			}
 		*/
 
-		res.SetLength(length)
+		re.SetLength(length)
 
 		reader := io.MultiReader(readers...)
-		res.SetOutput(reader)
+		go func() {
+			re.Emit(reader)
+			re.Close()
+		}()
 	},
-	PostRun: func(req cmds.Request, res cmds.Response) {
-		if res.Length() < progressBarMinSize {
-			return
-		}
+	PostRun: map[cmds.EncodingType]func(cmds.Request, cmds.Response) cmds.Response{
+		cmds.CLI: func(req cmds.Request, res cmds.Response) cmds.Response {
+			if res.Length() < progressBarMinSize {
+				return res
+			}
 
-		bar, reader := progressBarForReader(res.Stderr(), res.Output().(io.Reader), int64(res.Length()))
-		bar.Start()
+			re, res_ := cmds.NewChanResponsePair(req)
 
-		res.SetOutput(reader)
+			v, err := res.Next()
+			if err != nil {
+			}
+
+			r, ok := v.(io.Reader)
+			if !ok {
+			}
+
+			bar, reader := progressBarForReader(os.Stderr, r, int64(res.Length()))
+			bar.Start()
+
+			re.Emit(reader)
+
+			return res_
+		},
 	},
 }
 

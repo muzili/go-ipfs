@@ -223,6 +223,7 @@ var swarmAddrsCmd = &cmds.Command{
 			sort.Sort(sort.StringSlice(addrs[s]))
 		}
 
+		log.Debug("swarm addrs: setoutput")
 		res.SetOutput(&addrMap{Addrs: addrs})
 	},
 	Marshalers: cmds.MarshalerMap{
@@ -264,6 +265,7 @@ var swarmAddrsLocalCmd = &cmds.Command{
 		cmdsutil.BoolOption("id", "Show peer ID in addresses.").Default(false),
 	},
 	Run: func(req cmds.Request, res cmds.Response) {
+		log.Debug("swarm addrs local: Run()")
 
 		n, err := req.InvocContext().GetNode()
 		if err != nil {
@@ -289,6 +291,7 @@ var swarmAddrsLocalCmd = &cmds.Command{
 		}
 		sort.Sort(sort.StringSlice(addrs))
 
+		log.Debug("swarm addrs local Run: SetOutput()")
 		res.SetOutput(&stringList{addrs})
 	},
 	Type: stringList{},
@@ -434,8 +437,17 @@ it will reconnect.
 }
 
 func stringListMarshaler(res cmds.Response) (io.Reader, error) {
-	list, ok := res.Output().(*stringList)
+	log.Debug("stringListMarshaler()")
+
+	ch, ok := res.Output().(chan interface{})
 	if !ok {
+		log.Debug("stringListMarshaler: chan cast failed")
+		return nil, errors.New("failed to cast chan interface{}")
+	}
+
+	list, ok := (<-ch).(*stringList)
+	if !ok {
+		log.Debug("stringListMarshaler: stringlist cast failed")
 		return nil, errors.New("failed to cast []string")
 	}
 
@@ -444,6 +456,9 @@ func stringListMarshaler(res cmds.Response) (io.Reader, error) {
 		buf.WriteString(s)
 		buf.WriteString("\n")
 	}
+
+	log.Debugf("marsh ok, buf content=%s", buf.Bytes())
+
 	return buf, nil
 }
 
