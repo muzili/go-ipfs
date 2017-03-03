@@ -204,14 +204,14 @@ You can now refer to the added file in a gateway, like so:
 		bserv := blockservice.New(addblockstore, exch)
 		dserv := dag.NewDAGService(bserv)
 
-		outChan := make(chan interface{}, 8)
-		res.SetOutput((<-chan interface{})(outChan))
-
 		fileAdder, err := coreunix.NewAdder(req.Context(), n.Pinning, n.Blockstore, dserv, cidVer)
 		if err != nil {
 			res.SetError(err, cmds.ErrNormal)
 			return
 		}
+
+		outChan := make(chan interface{}, 8)
+		res.SetOutput((<-chan interface{})(outChan))
 
 		fileAdder.Out = outChan
 		fileAdder.Chunker = chunker

@@ -438,6 +438,12 @@ test_add_pwd_is_symlink
 
 test_add_cat_raw
 
+test_expect_success "ipfs add --cid-version=9 fails" '
+	echo "context" > afile.txt &&
+	test_must_fail ipfs add --cid-version=9 afile.txt 2>&1 | tee add_out &&
+	grep -q "unknown CID version" add_out
+'
+
 test_kill_ipfs_daemon
 
 # should work offline
