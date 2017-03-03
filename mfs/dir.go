@@ -50,6 +50,10 @@ func NewDirectory(ctx context.Context, name string, node *dag.ProtoNode, parent 
 	}
 }
 
+func (d *Directory) SetCidVersion(cidVer dag.CidVersion) {
+	d.node.SetCidVersion(cidVer)
+}
+
 // closeChild updates the child by the given name to the dag node 'nd'
 // and changes its own dag node
 func (d *Directory) closeChild(name string, nd *dag.ProtoNode, sync bool) error {

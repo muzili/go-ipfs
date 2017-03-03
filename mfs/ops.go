@@ -7,6 +7,7 @@ import (
 	gopath "path"
 	"strings"
 
+	dag "github.com/ipfs/go-ipfs/merkledag"
 	path "github.com/ipfs/go-ipfs/path"
 
 	node "gx/ipfs/QmYDscK7dmdo2GZ9aumS8s5auUUAH5mR1jvj5pYhWusfK7/go-ipld-node"
@@ -104,7 +105,7 @@ func PutNode(r *Root, path string, nd node.Node) error {
 
 // Mkdir creates a directory at 'path' under the directory 'd', creating
 // intermediary directories as needed if 'mkparents' is set to true
-func Mkdir(r *Root, pth string, mkparents bool, flush bool) error {
+func Mkdir(r *Root, pth string, mkparents bool, flush bool, cidVer dag.CidVersion) error {
 	if pth == "" {
 		return fmt.Errorf("no path given to Mkdir")
 	}
@@ -134,6 +135,7 @@ func Mkdir(r *Root, pth string, mkparents bool, flush bool) error {
 			if err != nil {
 				return err
 			}
+			mkd.SetCidVersion(cidVer)
 			fsn = mkd
 		} else if err != nil {
 			return err
@@ -152,6 +154,7 @@ func Mkdir(r *Root, pth string, mkparents bool, flush bool) error {
 			return err
 		}
 	}
+	final.SetCidVersion(cidVer)
 
 	if flush {
 		err := final.Flush()

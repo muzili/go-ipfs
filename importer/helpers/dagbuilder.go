@@ -7,6 +7,7 @@ import (
 	"github.com/ipfs/go-ipfs/commands/files"
 	"github.com/ipfs/go-ipfs/importer/chunk"
 	dag "github.com/ipfs/go-ipfs/merkledag"
+	ft "github.com/ipfs/go-ipfs/unixfs"
 
 	node "gx/ipfs/QmYDscK7dmdo2GZ9aumS8s5auUUAH5mR1jvj5pYhWusfK7/go-ipld-node"
 )
@@ -14,15 +15,16 @@ import (
 // DagBuilderHelper wraps together a bunch of objects needed to
 // efficiently create unixfs dag trees
 type DagBuilderHelper struct {
-	dserv     dag.DAGService
-	spl       chunk.Splitter
-	recvdErr  error
-	rawLeaves bool
-	nextData  []byte // the next item to return.
-	maxlinks  int
-	batch     *dag.Batch
-	fullPath  string
-	stat      os.FileInfo
+	dserv      dag.DAGService
+	spl        chunk.Splitter
+	recvdErr   error
+	rawLeaves  bool
+	nextData   []byte // the next item to return.
+	maxlinks   int
+	batch      *dag.Batch
+	fullPath   string
+	stat       os.FileInfo
+	cidVersion dag.CidVersion
 }
 
 type DagBuilderParams struct {
@@ -32,6 +34,9 @@ type DagBuilderParams struct {
 	// RawLeaves signifies that the importer should use raw ipld nodes as leaves
 	// instead of using the unixfs TRaw type
 	RawLeaves bool
+
+	// Prefix specifies cid version and hashing function
+	CidVersion dag.CidVersion
 
 	// DAGService to write blocks to (required)
 	Dagserv dag.DAGService
@@ -45,11 +50,12 @@ type DagBuilderParams struct {
 // from chunks object
 func (dbp *DagBuilderParams) New(spl chunk.Splitter) *DagBuilderHelper {
 	db := &DagBuilderHelper{
-		dserv:     dbp.Dagserv,
-		spl:       spl,
-		rawLeaves: dbp.RawLeaves,
-		maxlinks:  dbp.Maxlinks,
-		batch:     dbp.Dagserv.Batch(),
+		dserv:      dbp.Dagserv,
+		spl:        spl,
+		rawLeaves:  dbp.RawLeaves,
+		cidVersion: dbp.CidVersion,
+		maxlinks:   dbp.Maxlinks,
+		batch:      dbp.Dagserv.Batch(),
 	}
 	if fi, ok := spl.Reader().(files.FileInfo); dbp.NoCopy && ok {
 		db.fullPath = fi.AbsPath()
@@ -103,6 +109,16 @@ func (db *DagBuilderHelper) GetDagServ() dag.DAGService {
 	return db.dserv
 }
 
+// NewUnixfsNode creates a new Unixfs node to represent a file.
+func (db *DagBuilderHelper) NewUnixfsNode() *UnixfsNode {
+	n := &UnixfsNode{
+		node: new(dag.ProtoNode),
+		ufmt: &ft.FSNode{Type: ft.TFile},
+	}
+	n.SetCidVersion(db.cidVersion)
+	return n
+}
+
 // FillNodeLayer will add datanodes as children to the give node until
 // at most db.indirSize ndoes are added
 //
@@ -143,7 +159,11 @@ func (db *DagBuilderHelper) GetNextDataNode() (*UnixfsNode, error) {
 			raw:     true,
 		}, nil
 	} else {
-		blk := NewUnixfsBlock()
+		blk := &UnixfsNode{
+			node: new(dag.ProtoNode),
+			ufmt: &ft.FSNode{Type: ft.TRaw},
+		}
+		blk.SetCidVersion(db.cidVersion)
 		blk.SetData(data)
 		return blk, nil
 	}

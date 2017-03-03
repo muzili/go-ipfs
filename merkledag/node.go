@@ -28,11 +28,30 @@ type ProtoNode struct {
 	Prefix cid.Prefix
 }
 
-var defaultCidPrefix = cid.Prefix{
+var v0CidPrefix = cid.Prefix{
 	Codec:    cid.DagProtobuf,
 	MhLength: -1,
 	MhType:   mh.SHA2_256,
 	Version:  0,
+}
+
+var v1CidPrefix = cid.Prefix{
+	Codec:    cid.DagProtobuf,
+	MhLength: -1,
+	MhType:   mh.SHA2_256,
+	Version:  1,
+}
+
+func (n *ProtoNode) SetCidVersion(v CidVersion) {
+	switch v := v.Version(); v {
+	case 0:
+		n.Prefix = v0CidPrefix
+	case 1:
+		n.Prefix = v1CidPrefix
+	default:
+		// should not happen
+		panic("unhanded prefix version")
+	}
 }
 
 type LinkSlice []*node.Link
@@ -158,6 +177,9 @@ func (n *ProtoNode) Copy() node.Node {
 		nnode.links = make([]*node.Link, len(n.links))
 		copy(nnode.links, n.links)
 	}
+
+	nnode.Prefix = n.Prefix
+
 	return nnode
 }
 
@@ -260,7 +282,7 @@ func (n *ProtoNode) Cid() *cid.Cid {
 	}
 
 	if n.Prefix.Codec == 0 {
-		n.Prefix = defaultCidPrefix
+		n.Prefix = v0CidPrefix
 	}
 
 	c, err := n.Prefix.Sum(n.RawData())
