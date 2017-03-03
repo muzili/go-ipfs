@@ -173,6 +173,10 @@ You can now refer to the added file in a gateway, like so:
 			return
 		}
 
+		if cidVer >= 1 && !rbset {
+			rawblks = true
+		}
+
 		if hash {
 			nilnode, err := core.NewNode(n.Context(), &core.BuildCfg{
 				//TODO: need this to be true or all files
