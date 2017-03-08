@@ -719,7 +719,7 @@ Examples:
 
 		flush, _, _ := req.Option("flush").Bool()
 
-		err = mfs.Mkdir(n.FilesRoot, dirtomake, dashp, flush, dag.CidVersion{})
+		err = mfs.Mkdir(n.FilesRoot, dirtomake, dashp, flush)
 		if err != nil {
 			res.SetError(err, cmds.ErrNormal)
 			return

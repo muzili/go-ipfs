@@ -60,6 +60,9 @@ type Root struct {
 	dserv dag.DAGService
 
 	Type string
+
+	// CID version of the children
+	CidVersion dag.CidVersion
 }
 
 type PubFunc func(context.Context, *cid.Cid) error

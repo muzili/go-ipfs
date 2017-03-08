@@ -76,6 +76,7 @@ func NewAdder(ctx context.Context, p pin.Pinner, bs bstore.GCBlockstore, ds dag.
 	rnode := unixfs.EmptyDirNode()
 	rnode.SetCidVersion(cidVer)
 	mr, err := mfs.NewRoot(ctx, ds, rnode, nil)
+	mr.CidVersion = cidVer
 	if err != nil {
 		return nil, err
 	}
@@ -357,7 +358,7 @@ func (adder *Adder) addNode(node node.Node, path string) error {
 
 	dir := gopath.Dir(path)
 	if dir != "." {
-		if err := mfs.Mkdir(adder.mr, dir, true, false, adder.cidVersion); err != nil {
+		if err := mfs.Mkdir(adder.mr, dir, true, false); err != nil {
 			return err
 		}
 	}
@@ -438,7 +439,7 @@ func (adder *Adder) addFile(file files.File) error {
 func (adder *Adder) addDir(dir files.File) error {
 	log.Infof("adding directory: %s", dir.FileName())
 
-	err := mfs.Mkdir(adder.mr, dir.FileName(), true, false, adder.cidVersion)
+	err := mfs.Mkdir(adder.mr, dir.FileName(), true, false)
 	if err != nil {
 		return err
 	}
