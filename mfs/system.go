@@ -61,7 +61,7 @@ type Root struct {
 
 	Type string
 
-	// CID version of the children
+	// CID version to use for any children created
 	CidVersion dag.CidVersion
 }
 
@@ -102,6 +102,14 @@ func NewRoot(parent context.Context, ds dag.DAGService, node *dag.ProtoNode, pf 
 		panic("unrecognized! (NYI)")
 	}
 	return root, nil
+}
+
+// SetCidVersion sets the CidVersion of the root node, and any
+// children created.  To just set the CID version of future children,
+// set CidVersion directly
+func (kr *Root) SetCidVersion(cidVer dag.CidVersion) {
+	kr.node.SetCidVersion(cidVer)
+	kr.CidVersion = cidVer
 }
 
 func (kr *Root) GetValue() FSNode {

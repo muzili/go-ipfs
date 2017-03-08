@@ -158,7 +158,7 @@ You can now refer to the added file in a gateway, like so:
 		rawblks, rbset, _ := req.Option(rawLeavesOptionName).Bool()
 		nocopy, _, _ := req.Option(noCopyOptionName).Bool()
 		fscache, _, _ := req.Option(fstoreCacheOptionName).Bool()
-		cidVer, _, _ := req.Option(cidVersionOptionName).Int()
+		cidVerNum, _, _ := req.Option(cidVersionOptionName).Int()
 
 		if nocopy && !cfg.Experimental.FilestoreEnabled {
 			res.SetError(errors.New("filestore is not enabled, see https://git.io/vy4XN"),
@@ -175,8 +175,14 @@ You can now refer to the added file in a gateway, like so:
 			return
 		}
 
-		if cidVer >= 1 && !rbset {
+		if cidVerNum >= 1 && !rbset {
 			rawblks = true
+		}
+
+		cidVer, err := dag.NewCidVersion(cidVerNum)
+		if err != nil {
+			res.SetError(err, cmds.ErrNormal)
+			return
 		}
 
 		if hash {
@@ -206,7 +212,7 @@ You can now refer to the added file in a gateway, like so:
 		bserv := blockservice.New(addblockstore, exch)
 		dserv := dag.NewDAGService(bserv)
 
-		fileAdder, err := coreunix.NewAdder(req.Context(), n.Pinning, n.Blockstore, dserv, cidVer)
+		fileAdder, err := coreunix.NewAdder(req.Context(), n.Pinning, n.Blockstore, dserv)
 		if err != nil {
 			res.SetError(err, cmds.ErrNormal)
 			return
@@ -225,6 +231,8 @@ You can now refer to the added file in a gateway, like so:
 		fileAdder.Silent = silent
 		fileAdder.RawLeaves = rawblks
 		fileAdder.NoCopy = nocopy
+
+		fileAdder.SetCidVersion(cidVer)
 
 		if hash {
 			md := dagtest.Mock()

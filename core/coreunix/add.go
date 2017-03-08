@@ -67,16 +67,9 @@ type AddedObject struct {
 	Bytes int64  `json:",omitempty"`
 }
 
-func NewAdder(ctx context.Context, p pin.Pinner, bs bstore.GCBlockstore, ds dag.DAGService, v int) (*Adder, error) {
-	cidVer, err := dag.NewCidVersion(v)
-	if err != nil {
-		return nil, err
-	}
-
+func NewAdder(ctx context.Context, p pin.Pinner, bs bstore.GCBlockstore, ds dag.DAGService) (*Adder, error) {
 	rnode := unixfs.EmptyDirNode()
-	rnode.SetCidVersion(cidVer)
 	mr, err := mfs.NewRoot(ctx, ds, rnode, nil)
-	mr.CidVersion = cidVer
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +86,6 @@ func NewAdder(ctx context.Context, p pin.Pinner, bs bstore.GCBlockstore, ds dag.
 		Trickle:    false,
 		Wrap:       false,
 		Chunker:    "",
-		cidVersion: cidVer,
 	}, nil
 
 }
@@ -119,6 +111,11 @@ type Adder struct {
 	unlocker   bs.Unlocker
 	tempRoot   *cid.Cid
 	cidVersion dag.CidVersion
+}
+
+func (adder *Adder) SetCidVersion(cidVer dag.CidVersion) {
+	adder.mr.SetCidVersion(cidVer)
+	adder.cidVersion = cidVer
 }
 
 func (adder *Adder) SetMfsRoot(r *mfs.Root) {
@@ -276,7 +273,7 @@ func Add(n *core.IpfsNode, r io.Reader) (string, error) {
 func AddWithContext(ctx context.Context, n *core.IpfsNode, r io.Reader) (string, error) {
 	defer n.Blockstore.PinLock().Unlock()
 
-	fileAdder, err := NewAdder(n.Context(), n.Pinning, n.Blockstore, n.DAG, 0)
+	fileAdder, err := NewAdder(n.Context(), n.Pinning, n.Blockstore, n.DAG)
 	if err != nil {
 		return "", err
 	}
@@ -304,7 +301,7 @@ func AddR(n *core.IpfsNode, root string) (key string, err error) {
 	}
 	defer f.Close()
 
-	fileAdder, err := NewAdder(n.Context(), n.Pinning, n.Blockstore, n.DAG, 0)
+	fileAdder, err := NewAdder(n.Context(), n.Pinning, n.Blockstore, n.DAG)
 	if err != nil {
 		return "", err
 	}
@@ -328,7 +325,7 @@ func AddR(n *core.IpfsNode, root string) (key string, err error) {
 // the directory, and and error if any.
 func AddWrapped(n *core.IpfsNode, r io.Reader, filename string) (string, node.Node, error) {
 	file := files.NewReaderFile(filename, filename, ioutil.NopCloser(r), nil)
-	fileAdder, err := NewAdder(n.Context(), n.Pinning, n.Blockstore, n.DAG, 0)
+	fileAdder, err := NewAdder(n.Context(), n.Pinning, n.Blockstore, n.DAG)
 	if err != nil {
 		return "", nil, err
 	}
