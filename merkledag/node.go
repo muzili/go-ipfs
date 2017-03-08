@@ -43,7 +43,7 @@ var v1CidPrefix = cid.Prefix{
 }
 
 func (n *ProtoNode) SetCidVersion(v CidVersion) {
-	switch v := v.Version(); v {
+	switch v {
 	case 0:
 		n.Prefix = v0CidPrefix
 	case 1:
