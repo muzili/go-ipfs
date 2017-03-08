@@ -119,6 +119,16 @@ func (db *DagBuilderHelper) NewUnixfsNode() *UnixfsNode {
 	return n
 }
 
+// NewUnixfsBlock creates a new Unixfs node to represent a raw data block
+func (db *DagBuilderHelper) NewUnixfsBlock() *UnixfsNode {
+	n := &UnixfsNode{
+		node: new(dag.ProtoNode),
+		ufmt: &ft.FSNode{Type: ft.TRaw},
+	}
+	n.SetCidVersion(db.cidVersion)
+	return n
+}
+
 // FillNodeLayer will add datanodes as children to the give node until
 // at most db.indirSize ndoes are added
 //
@@ -159,11 +169,7 @@ func (db *DagBuilderHelper) GetNextDataNode() (*UnixfsNode, error) {
 			raw:     true,
 		}, nil
 	} else {
-		blk := &UnixfsNode{
-			node: new(dag.ProtoNode),
-			ufmt: &ft.FSNode{Type: ft.TRaw},
-		}
-		blk.SetCidVersion(db.cidVersion)
+		blk := db.NewUnixfsBlock()
 		blk.SetData(data)
 		return blk, nil
 	}
