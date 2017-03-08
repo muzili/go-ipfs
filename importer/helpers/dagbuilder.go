@@ -35,7 +35,7 @@ type DagBuilderParams struct {
 	// instead of using the unixfs TRaw type
 	RawLeaves bool
 
-	// Prefix specifies cid version and hashing function
+	// CID Version to use
 	CidVersion dag.CidVersion
 
 	// DAGService to write blocks to (required)

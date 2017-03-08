@@ -9,12 +9,15 @@ type CidVersion struct {
 	version uint64
 }
 
+var (
+	CID0 = CidVersion{0}
+	CID1 = CidVersion{1}
+)
+
 func NewCidVersion(version int) (CidVersion, error) {
 	switch version {
-	case 0:
-		return CidVersion{0}, nil
-	case 1:
-		return CidVersion{1}, nil
+	case 0, 1:
+		return CidVersion{uint64(version)}, nil
 	default:
 		return CidVersion{}, fmt.Errorf("unknown CID version: %d", version)
 	}
@@ -23,4 +26,3 @@ func NewCidVersion(version int) (CidVersion, error) {
 func (v CidVersion) Version() uint64 {
 	return v.version
 }
-
