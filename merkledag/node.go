@@ -52,6 +52,8 @@ func (n *ProtoNode) SetCidVersion(v CidVersion) {
 		// should not happen
 		panic("unhanded prefix version")
 	}
+	n.encoded = nil
+	n.cached = nil
 }
 
 type LinkSlice []*node.Link
