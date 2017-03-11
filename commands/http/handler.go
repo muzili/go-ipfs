@@ -229,6 +229,8 @@ func sendResponse(w http.ResponseWriter, r *http.Request, res cmds.Response, req
 	if e := res.Error(); e != nil {
 		if e.Code == cmds.ErrClient {
 			status = http.StatusBadRequest
+		} else if e.Code == cmds.ErrNotFound {
+			status = http.StatusNotFound
 		} else {
 			status = http.StatusInternalServerError
 		}
