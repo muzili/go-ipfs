@@ -270,19 +270,23 @@ It takes a list of base58 encoded multihashs to remove.
 			Quiet: quiet,
 			Force: force,
 		})
+		log.Debug("RmBlocks returned ", ch, err)
 		if err != nil {
 			re.SetError(err, cmdsutil.ErrNormal)
 			return
 		}
-		go func() {
-			for v := range ch {
-				err := re.Emit(v)
-				if err != nil {
-					// TODO keks does that even work here? it definitely should!
-					re.SetError(err, cmdsutil.ErrNormal)
-				}
+		log.Debug("Run: starting loop")
+		for v := range ch {
+			log.Debug("got value %v from channel, emitting...", v)
+			err := re.Emit(v)
+			if err != nil {
+				re.SetError(err, cmdsutil.ErrNormal)
+				log.Debug("Run: returning from loop")
+				return
 			}
-		}()
+			log.Debug("emitted")
+		}
+		log.Debug("Run: loop done")
 	},
 	PostRun: map[cmds.EncodingType]func(cmds.Request, cmds.ResponseEmitter) cmds.ResponseEmitter{
 		cmds.CLI: func(req cmds.Request, re cmds.ResponseEmitter) cmds.ResponseEmitter {

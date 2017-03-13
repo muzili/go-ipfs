@@ -231,14 +231,15 @@ You can now refer to the added file in a gateway, like so:
 			}
 		}()
 
-		go func() {
-			for v := range outChan {
-				err := re.Emit(v)
-				if err != nil {
-					re.SetError(err, cmdsutil.ErrNormal)
-				}
+		defer re.Close()
+		for v := range outChan {
+			log.Debug("add.Run outChan rx ", v)
+			err := re.Emit(v)
+			if err != nil {
+				log.Debugf("addCmd.Run emit error %s with value %#v", err, v)
+				return
 			}
-		}()
+		}
 	},
 	PostRun: map[cmds.EncodingType]func(cmds.Request, cmds.ResponseEmitter) cmds.ResponseEmitter{
 		cmds.CLI: func(req cmds.Request, re cmds.ResponseEmitter) cmds.ResponseEmitter {

@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"fmt"
 	"io"
 	"os"
 
@@ -56,10 +57,8 @@ var CatCmd = &cmds.Command{
 		re.SetLength(length)
 
 		reader := io.MultiReader(readers...)
-		go func() {
-			re.Emit(reader)
-			re.Close()
-		}()
+		re.Emit(reader)
+		re.Close()
 	},
 	PostRun: map[cmds.EncodingType]func(cmds.Request, cmds.ResponseEmitter) cmds.ResponseEmitter{
 		cmds.CLI: func(req cmds.Request, re cmds.ResponseEmitter) cmds.ResponseEmitter {
