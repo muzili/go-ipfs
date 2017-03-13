@@ -311,83 +311,108 @@ func callCommand(ctx context.Context, req cmds.Request, root *cmds.Command, cmd 
 		return err
 	}
 
-	log.Debug(req.Option(cmdsutil.EncShort))
+	encTypeStr, found, err := req.Option("encoding").String()
+	if !found || err != nil {
+		panic("omg wtf " + err.Error())
+	}
+	encType := cmds.EncodingType(encTypeStr)
 
-	chRe, chRes := cmds.NewChanResponsePair(req)
-	re := cli.NewResponseEmitter(w, cmd.Encoders[cmds.Text], chRes)
-	re.Tee(chRe)
+	log.Debug("creating RE with encType ", encType)
+
+	var (
+		re    cmds.ResponseEmitter
+		errCh <-chan *cmdsutil.Error
+	)
+
+	if enc, ok := cmd.Encoders[encType]; ok {
+		re, errCh = cli.NewResponseEmitter(w, enc, req)
+	} else if enc, ok := cmds.Encoders[encType]; ok {
+		re, errCh = cli.NewResponseEmitter(w, enc, req)
+	} else {
+		// TODO I guess this can simply be removed
+		panic("omg couldn't find fitting encoder D:")
+	}
+
+	log.Debugf("initial cli.RE uses global encoder for %s(%v)", encTypeStr, cmd.Encoders[cmds.EncodingType(encTypeStr)])
 
 	if cmd.PreRun != nil {
 		err = cmd.PreRun(req)
 		if err != nil {
+			log.Debug("callCommands returns ", err)
 			return err
 		}
 	}
 
-	var res, postRes cmds.Response
-
-	oldre := re
-	if cmd.PostRun != nil {
+	if cmd.PostRun != nil && cmd.PostRun[cmds.CLI] != nil {
 		log.Debug("preparing PostRun")
-		var postRe cmds.ResponseEmitter
-
-		// new channel-based pair
-		postRe, postRes = cmds.NewChanResponsePair(req)
-
-		// overwrite output
-		re = postRe
+		re = cmd.PostRun[cmds.CLI](req, re)
 	}
 
 	if client != nil && !cmd.External {
-		log.Debug("executing command via API")
-		res, err = client.Send(req)
+		log.Warning("executing command via API")
+		res, err := client.Send(req)
 		log.Debug("client.Send returned", res, err)
 		if err != nil {
 			if isConnRefused(err) {
 				err = repo.ErrApiNotRunning
 			}
-			return wrapContextCanceled(err)
+			err = wrapContextCanceled(err)
+			log.Debug("callCommands returns ", err)
+			return err
 		}
 
-		cmds.Copy(re, res)
-		log.Debug("api response copied to re")
+		go func() {
+			err = cmds.Copy(re, res)
+			log.Debug("api response copied to re, err=", err)
+			if err != nil {
+				log.Debug("callCommands returns ", err)
+				//return err
+			}
+		}()
 	} else {
 		log.Debug("executing command locally")
 
 		err := req.SetRootContext(ctx)
 		if err != nil {
+			log.Debug("callCommands returns ", err)
 			return err
 		}
 
 		// Okay!!!!! NOW we can call the command.
-		err = root.Call(req, re)
-		log.Debug("root.Call returned ", err)
-		if err != nil {
-			return err
+		go func() {
+			err := root.Call(req, re)
+			log.Debug("root.Call returned ", err)
+			if err != nil {
+				log.Info("callCommands returns ", err)
+			}
+		}()
+	}
+
+	log.Debug("waiting for errCh=", errCh)
+	err = <-errCh
+	log.Debug("callCommands returns ", err)
+
+	// if we don't do this, an err==nil will return false because there is a concrete type
+	if e, ok := err.(*cmdsutil.Error); ok && e == nil {
+		return nil
+	}
+
+	return err
+
+	/*
+		if ere, ok := re.(cmds.Header); ok {
+			log.Debugf("calling Head()on re of type %T", re)
+			h := ere.Head()
+
+			log.Debug("final head:", h)
+
+			if err := h.Error(); err != nil {
+				return err
+			}
+		} else {
+			log.Debug("ResponseEmitter can't Head()")
 		}
-	}
-
-	if cmd.PostRun != nil {
-		log.Debug("calling PostRun")
-		res = cmd.PostRun[cmds.CLI](req, postRes)
-
-		// copy that respose to output
-		cmds.Copy(oldre, res)
-	}
-
-	if ere, ok := oldre.(cmds.Header); ok {
-		h := ere.Head()
-
-		log.Debug("final head:", h)
-
-		if err := h.Error(); err != nil {
-			return err
-		}
-	} else {
-		log.Debug("ResponseEmitter can't Head()")
-	}
-
-	return nil
+	*/
 }
 
 // commandDetails returns a command's details for the command given by |path|
