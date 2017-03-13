@@ -295,7 +295,14 @@ var ObjectStatCmd = &cmds.Command{
 	Type: node.NodeStat{},
 	Marshalers: cmds.MarshalerMap{
 		cmds.Text: func(res cmds.Response) (io.Reader, error) {
-			ns := res.Output().(*node.NodeStat)
+			var ch <-chan interface{}
+
+			if ch_, ok := res.Output().(chan interface{}); ok {
+				ch = ch_
+			} else {
+				ch = res.Output().(chan interface{})
+			}
+			ns := (<-ch).(*node.NodeStat)
 
 			buf := new(bytes.Buffer)
 			w := func(s string, n int) {
@@ -396,7 +403,14 @@ And then run:
 	},
 	Marshalers: cmds.MarshalerMap{
 		cmds.Text: func(res cmds.Response) (io.Reader, error) {
-			object := res.Output().(*Object)
+			var ch <-chan interface{}
+
+			if ch_, ok := res.Output().(chan interface{}); ok {
+				ch = ch_
+			} else {
+				ch = res.Output().(chan interface{})
+			}
+			object := (<-ch).(*Object)
 			return strings.NewReader("added " + object.Hash + "\n"), nil
 		},
 	},
@@ -449,7 +463,14 @@ Available templates:
 	},
 	Marshalers: cmds.MarshalerMap{
 		cmds.Text: func(res cmds.Response) (io.Reader, error) {
-			object := res.Output().(*Object)
+			var ch <-chan interface{}
+
+			if ch_, ok := res.Output().(chan interface{}); ok {
+				ch = ch_
+			} else {
+				ch = res.Output().(chan interface{})
+			}
+			object := (<-ch).(*Object)
 			return strings.NewReader(object.Hash + "\n"), nil
 		},
 	},

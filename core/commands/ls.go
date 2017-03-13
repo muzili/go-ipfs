@@ -145,8 +145,10 @@ The JSON output contains type information.
 	Marshalers: cmds.MarshalerMap{
 		cmds.Text: func(res cmds.Response) (io.Reader, error) {
 
+			outCh := res.Output().(chan interface{})
+
 			headers, _, _ := res.Request().Option("headers").Bool()
-			output := res.Output().(*LsOutput)
+			output := (<-outCh).(*LsOutput)
 			buf := new(bytes.Buffer)
 			w := tabwriter.NewWriter(buf, 1, 2, 1, ' ', 0)
 			for _, object := range output.Objects {

@@ -133,7 +133,8 @@ Publish an <ipfs-path> to another public key (not implemented):
 	},
 	Marshalers: cmds.MarshalerMap{
 		cmds.Text: func(res cmds.Response) (io.Reader, error) {
-			v := res.Output().(*IpnsEntry)
+			ch := res.Output().(chan interface{})
+			v := (<-ch).(*IpnsEntry)
 			s := fmt.Sprintf("Published to %s: %s\n", v.Name, v.Value)
 			return strings.NewReader(s), nil
 		},

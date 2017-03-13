@@ -122,7 +122,11 @@ var swarmPeersCmd = &cmds.Command{
 	},
 	Marshalers: cmds.MarshalerMap{
 		cmds.Text: func(res cmds.Response) (io.Reader, error) {
-			ci, ok := res.Output().(*connInfos)
+			ch, ok := res.Output().(chan interface{})
+			if !ok {
+				return nil, fmt.Errorf("expected output type to be chan interface{}")
+			}
+			ci, ok := (<-ch).(*connInfos)
 			if !ok {
 				return nil, fmt.Errorf("expected output type to be connInfos")
 			}
@@ -228,7 +232,12 @@ var swarmAddrsCmd = &cmds.Command{
 	},
 	Marshalers: cmds.MarshalerMap{
 		cmds.Text: func(res cmds.Response) (io.Reader, error) {
-			m, ok := res.Output().(*addrMap)
+			ch, ok := res.Output().(chan interface{})
+			if !ok {
+				return nil, errors.New("failed to cast chan interface{}")
+			}
+
+			m, ok := (<-ch).(*addrMap)
 			if !ok {
 				return nil, errors.New("failed to cast map[string]string")
 			}

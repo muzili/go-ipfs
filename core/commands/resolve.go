@@ -112,7 +112,8 @@ Resolve the value of an IPFS DAG path:
 	},
 	Marshalers: cmds.MarshalerMap{
 		cmds.Text: func(res cmds.Response) (io.Reader, error) {
-			output, ok := res.Output().(*ResolvedPath)
+			ch := res.Output().(chan interface{})
+			output, ok := (<-ch).(*ResolvedPath)
 			if !ok {
 				return nil, u.ErrCast()
 			}

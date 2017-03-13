@@ -34,7 +34,15 @@ result. This is the Merkle-DAG version of modifying an object.
 }
 
 func objectMarshaler(res cmds.Response) (io.Reader, error) {
-	o, ok := res.Output().(*Object)
+	var ch <-chan interface{}
+
+	if ch_, ok := res.Output().(chan interface{}); ok {
+		ch = ch_
+	} else {
+		ch = res.Output().(chan interface{})
+	}
+
+	o, ok := (<-ch).(*Object)
 	if !ok {
 		return nil, u.ErrCast()
 	}

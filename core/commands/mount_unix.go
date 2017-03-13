@@ -127,7 +127,8 @@ baz
 	Type: config.Mounts{},
 	Marshalers: cmds.MarshalerMap{
 		cmds.Text: func(res cmds.Response) (io.Reader, error) {
-			v := res.Output().(*config.Mounts)
+			ch := res.Output().(chan interface{})
+			v := (<-ch).(*config.Mounts)
 			s := fmt.Sprintf("IPFS mounted at: %s\n", v.IPFS)
 			s += fmt.Sprintf("IPNS mounted at: %s\n", v.IPNS)
 			return strings.NewReader(s), nil
