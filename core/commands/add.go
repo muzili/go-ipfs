@@ -240,23 +240,127 @@ You can now refer to the added file in a gateway, like so:
 			}
 		}()
 	},
-	PostRun: map[cmds.EncodingType]func(cmds.Request, cmds.Response) cmds.Response{
-		cmds.CLI: func(req cmds.Request, res cmds.Response) cmds.Response {
-			if res.Error() != nil {
-				return res
-			}
-
-			re, res_ := cmds.NewChanResponsePair(req)
-
+	PostRun: map[cmds.EncodingType]func(cmds.Request, cmds.ResponseEmitter) cmds.ResponseEmitter{
+		cmds.CLI: func(req cmds.Request, re cmds.ResponseEmitter) cmds.ResponseEmitter {
+			re_, res := cmds.NewChanResponsePair(req)
 			outChan := make(chan interface{})
+
+			progressBar := func() {
+				quiet, _, err := req.Option("quiet").Bool()
+				if err != nil {
+					re.SetError(u.ErrCast(), cmdsutil.ErrNormal)
+					return
+				}
+
+				progress, _, err := req.Option(progressOptionName).Bool()
+				if err != nil {
+					re.SetError(u.ErrCast(), cmdsutil.ErrNormal)
+					return
+				}
+
+				var bar *pb.ProgressBar
+				if progress {
+					bar = pb.New64(0).SetUnits(pb.U_BYTES)
+					bar.ManualUpdate = true
+					bar.ShowTimeLeft = false
+					bar.ShowPercent = false
+					bar.Output = os.Stderr
+					bar.Start()
+				}
+
+				var sizeChan chan int64
+				s, found := req.Values()["size"]
+				if found {
+					sizeChan = s.(chan int64)
+				}
+
+				lastFile := ""
+				var totalProgress, prevFiles, lastBytes int64
+
+			LOOP:
+				for {
+					select {
+					case out, ok := <-outChan:
+						if !ok {
+							break LOOP
+						}
+						output := out.(*coreunix.AddedObject)
+						if len(output.Hash) > 0 {
+							if progress {
+								// clear progress bar line before we print "added x" output
+								fmt.Fprintf(os.Stderr, "\033[2K\r")
+							}
+							if quiet {
+								fmt.Fprintf(os.Stdout, "%s\n", output.Hash)
+							} else {
+								fmt.Fprintf(os.Stdout, "added %s %s\n", output.Hash, output.Name)
+							}
+
+						} else {
+							log.Debugf("add progress: %v %v\n", output.Name, output.Bytes)
+
+							if !progress {
+								continue
+							}
+
+							if len(lastFile) == 0 {
+								lastFile = output.Name
+							}
+							if output.Name != lastFile || output.Bytes < lastBytes {
+								prevFiles += lastBytes
+								lastFile = output.Name
+							}
+							lastBytes = output.Bytes
+							delta := prevFiles + lastBytes - totalProgress
+							totalProgress = bar.Add64(delta)
+						}
+
+						if progress {
+							bar.Update()
+						}
+					case size := <-sizeChan:
+						if progress {
+							bar.Total = size
+							bar.ShowPercent = true
+							bar.ShowBar = true
+							bar.ShowTimeLeft = true
+						}
+					case <-req.Context().Done():
+						re.SetError(req.Context().Err(), cmdsutil.ErrNormal)
+						return
+					}
+				}
+			}
 
 			go func() {
 				defer close(outChan)
 
+				if e := res.Error(); e != nil {
+					re.SetError(e.Message, e.Code)
+					return
+				}
+
+				go progressBar()
+
 				for {
+					defer re.Close()
 					v, err := res.Next()
+					log.Debug("add PostRun: next returned ", v, err)
+
 					if err != nil {
-						re.SetError(err, cmdsutil.ErrNormal)
+						// replace error by actual error - will be looked at by next if-statement
+						if err == cmds.ErrRcvdError {
+							err = res.Error()
+						}
+
+						if e, ok := err.(*cmdsutil.Error); ok {
+							re.SetError(e.Message, e.Code)
+						}
+
+						// TODO why does err != io.EOF return true?
+						if err.Error() != "EOF" {
+							re.SetError(err, cmdsutil.ErrNormal)
+						}
 						return
 					}
 
@@ -264,92 +368,7 @@ You can now refer to the added file in a gateway, like so:
 				}
 			}()
 
-			quiet, _, err := req.Option("quiet").Bool()
-			if err != nil {
-				re.SetError(u.ErrCast(), cmdsutil.ErrNormal)
-				return res_
-			}
-
-			progress, _, err := req.Option(progressOptionName).Bool()
-			if err != nil {
-				re.SetError(u.ErrCast(), cmdsutil.ErrNormal)
-				return res_
-			}
-
-			var bar *pb.ProgressBar
-			if progress {
-				bar = pb.New64(0).SetUnits(pb.U_BYTES)
-				bar.ManualUpdate = true
-				bar.ShowTimeLeft = false
-				bar.ShowPercent = false
-				bar.Output = os.Stderr
-				bar.Start()
-			}
-
-			var sizeChan chan int64
-			s, found := req.Values()["size"]
-			if found {
-				sizeChan = s.(chan int64)
-			}
-
-			lastFile := ""
-			var totalProgress, prevFiles, lastBytes int64
-
-		LOOP:
-			for {
-				select {
-				case out, ok := <-outChan:
-					if !ok {
-						break LOOP
-					}
-					output := out.(*coreunix.AddedObject)
-					if len(output.Hash) > 0 {
-						if progress {
-							// clear progress bar line before we print "added x" output
-							fmt.Fprintf(os.Stderr, "\033[2K\r")
-						}
-						if quiet {
-							fmt.Fprintf(os.Stdout, "%s\n", output.Hash)
-						} else {
-							fmt.Fprintf(os.Stdout, "added %s %s\n", output.Hash, output.Name)
-						}
-
-					} else {
-						log.Debugf("add progress: %v %v\n", output.Name, output.Bytes)
-
-						if !progress {
-							continue
-						}
-
-						if len(lastFile) == 0 {
-							lastFile = output.Name
-						}
-						if output.Name != lastFile || output.Bytes < lastBytes {
-							prevFiles += lastBytes
-							lastFile = output.Name
-						}
-						lastBytes = output.Bytes
-						delta := prevFiles + lastBytes - totalProgress
-						totalProgress = bar.Add64(delta)
-					}
-
-					if progress {
-						bar.Update()
-					}
-				case size := <-sizeChan:
-					if progress {
-						bar.Total = size
-						bar.ShowPercent = true
-						bar.ShowBar = true
-						bar.ShowTimeLeft = true
-					}
-				case <-req.Context().Done():
-					re.SetError(req.Context().Err(), cmdsutil.ErrNormal)
-					return res_
-				}
-			}
-
-			return res_
+			return re_
 		},
 	},
 	Type: coreunix.AddedObject{},

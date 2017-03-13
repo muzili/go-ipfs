@@ -284,39 +284,56 @@ It takes a list of base58 encoded multihashs to remove.
 			}
 		}()
 	},
-	PostRun: map[cmds.EncodingType]func(cmds.Request, cmds.Response) cmds.Response{
-		cmds.Text: func(req cmds.Request, res cmds.Response) cmds.Response {
-			if res.Error() != nil {
-				return res
-			}
-
-			re, res_ := cmds.NewChanResponsePair(req)
-
-			outChan := make(chan interface{})
+	PostRun: map[cmds.EncodingType]func(cmds.Request, cmds.ResponseEmitter) cmds.ResponseEmitter{
+		cmds.CLI: func(req cmds.Request, re cmds.ResponseEmitter) cmds.ResponseEmitter {
+			re_, res := cmds.NewChanResponsePair(req)
 
 			go func() {
-				defer close(outChan)
+				defer re.Close()
 
-				for {
-					v, err := res.Next()
-					if err == io.EOF {
-						return
-					}
-					if err != nil {
-						re.SetError(err, cmdsutil.ErrNormal)
-						return
-					}
+				outChan := make(chan interface{})
 
-					outChan <- v
+				go func() {
+					defer close(outChan)
+
+					var (
+						err error
+						v   interface{}
+					)
+
+					defer log.Debug("PostRun goroutine returns ", err)
+
+					for {
+						v, err = res.Next()
+
+						if err != nil {
+							if err == io.EOF || err.Error() == "EOF" {
+								return
+							}
+
+							if err == cmds.ErrRcvdError {
+								err = res.Error()
+							}
+
+							if e, ok := err.(*cmdsutil.Error); ok {
+								re.SetError(e.Message, e.Code)
+							} else {
+								re.SetError(err, cmdsutil.ErrNormal)
+							}
+							return
+						}
+
+						outChan <- v
+					}
+				}()
+
+				err := util.ProcRmOutput(outChan, os.Stdout, os.Stderr)
+				if err != nil {
+					re.SetError(err, cmdsutil.ErrNormal)
 				}
 			}()
 
-			err := util.ProcRmOutput(outChan, os.Stdout, os.Stderr)
-			if err != nil {
-				re.SetError(err, cmdsutil.ErrNormal)
-			}
-
-			return res_
+			return re_
 		},
 	},
 	Type: util.RemovedBlock{},

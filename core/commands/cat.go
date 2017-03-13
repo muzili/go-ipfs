@@ -61,28 +61,45 @@ var CatCmd = &cmds.Command{
 			re.Close()
 		}()
 	},
-	PostRun: map[cmds.EncodingType]func(cmds.Request, cmds.Response) cmds.Response{
-		cmds.CLI: func(req cmds.Request, res cmds.Response) cmds.Response {
-			if res.Length() < progressBarMinSize {
-				return res
-			}
+	PostRun: map[cmds.EncodingType]func(cmds.Request, cmds.ResponseEmitter) cmds.ResponseEmitter{
+		cmds.CLI: func(req cmds.Request, re cmds.ResponseEmitter) cmds.ResponseEmitter {
+			re_, res := cmds.NewChanResponsePair(req)
 
-			re, res_ := cmds.NewChanResponsePair(req)
+			go func() {
+				if res.Length() > 0 && res.Length() < progressBarMinSize {
+					log.Debugf("cat/res.Length() == %v < progressBarMinSize", res.Length())
+					cmds.Copy(re, res)
+					return
+				}
 
-			v, err := res.Next()
-			if err != nil {
-			}
+				// Copy closes by itself, so we must not do this before
+				defer re.Close()
 
-			r, ok := v.(io.Reader)
-			if !ok {
-			}
+				v, err := res.Next()
+				log.Debugf("cat/res.Next() returned (%v, %v)", v, err)
+				if err != nil {
+					if err == cmds.ErrRcvdError {
+						re.SetError(res.Error().Message, res.Error().Code)
+					} else {
+						re.SetError(res.Error(), cmdsutil.ErrNormal)
+					}
 
-			bar, reader := progressBarForReader(os.Stderr, r, int64(res.Length()))
-			bar.Start()
+					return
+				}
 
-			re.Emit(reader)
+				r, ok := v.(io.Reader)
+				if !ok {
+					re.SetError(fmt.Sprintf("expected io.Reader, not %T", v), cmdsutil.ErrNormal)
+					return
+				}
 
-			return res_
+				bar, reader := progressBarForReader(os.Stderr, r, int64(res.Length()))
+				bar.Start()
+
+				re.Emit(reader)
+			}()
+
+			return re_
 		},
 	},
 }

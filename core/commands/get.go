@@ -94,45 +94,54 @@ may also specify the level of compression by specifying '-l=<1-9>'.
 
 		re.Emit(reader)
 	},
-	PostRun: map[cmds.EncodingType]func(cmds.Request, cmds.Response) cmds.Response{
-		cmds.CLI: func(req cmds.Request, res cmds.Response) cmds.Response {
-			re, res_ := cmds.NewChanResponsePair(req)
+	PostRun: map[cmds.EncodingType]func(cmds.Request, cmds.ResponseEmitter) cmds.ResponseEmitter{
+		cmds.CLI: func(req cmds.Request, re cmds.ResponseEmitter) cmds.ResponseEmitter {
+			re_, res := cmds.NewChanResponsePair(req)
 
-			v, err := res.Next()
-			if err != nil {
-				re.SetError(err, cmdsutil.ErrNormal)
-				return res_
-			}
+			go func() {
+				defer re.Close()
 
-			outReader := v.(io.Reader)
+				v, err := res.Next()
+				if err != nil {
+					if err == cmds.ErrRcvdError {
+						e := res.Error()
+						re.SetError(e.Message, e.Code)
+					} else {
+						re.SetError(err, cmdsutil.ErrNormal)
+					}
+					return
+				}
 
-			outPath, _, _ := req.Option("output").String()
-			if len(outPath) == 0 {
-				_, outPath = gopath.Split(req.Arguments()[0])
-				outPath = gopath.Clean(outPath)
-			}
+				outReader := v.(io.Reader)
 
-			cmplvl, err := getCompressOptions(req)
-			if err != nil {
-				re.SetError(err, cmdsutil.ErrClient)
-				return res_
-			}
+				outPath, _, _ := req.Option("output").String()
+				if len(outPath) == 0 {
+					_, outPath = gopath.Split(req.Arguments()[0])
+					outPath = gopath.Clean(outPath)
+				}
 
-			archive, _, _ := req.Option("archive").Bool()
+				cmplvl, err := getCompressOptions(req)
+				if err != nil {
+					re.SetError(err, cmdsutil.ErrClient)
+					return
+				}
 
-			gw := getWriter{
-				Out:         os.Stdout,
-				Err:         os.Stderr,
-				Archive:     archive,
-				Compression: cmplvl,
-				Size:        int64(res.Length()),
-			}
+				archive, _, _ := req.Option("archive").Bool()
 
-			if err := gw.Write(outReader, outPath); err != nil {
-				re.SetError(err, cmdsutil.ErrNormal)
-			}
+				gw := getWriter{
+					Out:         os.Stdout,
+					Err:         os.Stderr,
+					Archive:     archive,
+					Compression: cmplvl,
+					Size:        int64(res.Length()),
+				}
 
-			return res_
+				if err := gw.Write(outReader, outPath); err != nil {
+					re.SetError(err, cmdsutil.ErrNormal)
+				}
+			}()
+
+			return re_
 		},
 	},
 }
