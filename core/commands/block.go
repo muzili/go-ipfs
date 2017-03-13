@@ -73,6 +73,13 @@ on raw IPFS blocks. It outputs the following to stdout:
 		})
 	},
 	Type: BlockStat{},
+	Encoders: map[cmds.EncodingType]func(cmds.Request) func(io.Writer) cmds.Encoder{
+		cmds.Text: cmds.MakeEncoder(func(w io.Writer, v interface{}) error {
+			bs := v.(*BlockStat)
+			_, err := fmt.Fprintf(w, "%s", bs)
+			return err
+		}),
+	},
 }
 
 var blockGetCmd = &cmds.Command{
@@ -198,7 +205,7 @@ It reads from stdin, and <key> is a base58 encoded multihash.
 			Size: len(data),
 		})
 	},
-	Encoders: map[cmds.EncodingType]func(cmds.Response) func(io.Writer) cmds.Encoder{
+	Encoders: map[cmds.EncodingType]func(cmds.Request) func(io.Writer) cmds.Encoder{
 		cmds.Text: cmds.MakeEncoder(func(w io.Writer, v interface{}) error {
 			bs := v.(*BlockStat)
 			_, err := fmt.Fprintf(w, "%s\n", bs.Key)
