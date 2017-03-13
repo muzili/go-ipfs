@@ -113,11 +113,14 @@ baz
 			nsdir = cfg.Mounts.IPNS // NB: be sure to not redeclare!
 		}
 
+		log.Debug("omg")
 		err = nodeMount.Mount(node, fsdir, nsdir)
 		if err != nil {
 			res.SetError(err, cmdsutil.ErrNormal)
+			log.Debug("wtf2")
 			return
 		}
+		log.Debug("wtf")
 
 		var output config.Mounts
 		output.IPFS = fsdir

@@ -117,7 +117,7 @@ func (r *routingResolver) ResolveN(ctx context.Context, name string, depth int) 
 // resolveOnce implements resolver. Uses the IPFS routing system to
 // resolve SFS-like names.
 func (r *routingResolver) resolveOnce(ctx context.Context, name string) (path.Path, error) {
-	log.Debugf("RoutingResolve: '%s'", name)
+	log.Debugf("RoutingResolve: '%s', router type: %T", name, r.routing)
 	cached, ok := r.cacheGet(name)
 	if ok {
 		return cached, nil

@@ -3,6 +3,7 @@ package blockstore_util
 import (
 	"fmt"
 	"io"
+	"os"
 
 	bs "github.com/ipfs/go-ipfs/blocks/blockstore"
 	"github.com/ipfs/go-ipfs/pin"
@@ -28,19 +29,25 @@ type RmBlocksOpts struct {
 }
 
 func RmBlocks(blocks bs.GCBlockstore, pins pin.Pinner, cids []*cid.Cid, opts RmBlocksOpts) (<-chan interface{}, error) {
+	fmt.Fprintf(os.Stderr, "bsutil: RmBlocks called with %v %#v\n", cids, opts)
 	// make the channel large enough to hold any result to avoid
 	// blocking while holding the GCLock
 	out := make(chan interface{}, len(cids))
 	go func() {
-		defer close(out)
+		defer func() {
+			close(out)
+			fmt.Fprintf(os.Stderr, "bsutil.RmBlocks: channel closed\n")
+		}()
 
 		unlocker := blocks.GCLock()
 		defer unlocker.Unlock()
 
 		stillOkay := FilterPinned(pins, out, cids)
+		fmt.Fprintf(os.Stderr, "bsutil.RmBlocks: FilterPinned returned %v\n", stillOkay)
 
 		for _, c := range stillOkay {
 			err := blocks.DeleteBlock(c)
+			fmt.Fprintf(os.Stderr, "bsutil.RmBlocks: DeleteBlock returned %v for %v\n", err, c)
 			if err != nil && opts.Force && (err == bs.ErrNotFound || err == ds.ErrNotFound) {
 				// ignore non-existent blocks
 			} else if err != nil {
@@ -49,6 +56,7 @@ func RmBlocks(blocks bs.GCBlockstore, pins pin.Pinner, cids []*cid.Cid, opts RmB
 				out <- &RemovedBlock{Hash: c.String()}
 			}
 		}
+		fmt.Fprintf(os.Stderr, "bsutil.RmBlocks: loop out\n")
 	}()
 	return out, nil
 }
