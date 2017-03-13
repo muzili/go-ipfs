@@ -89,10 +89,6 @@ test_object_cmd() {
 	'
 
 	test_expect_success "'ipfs object put broken.hxml' output looks good" '
-		# TODO remove this
-	 	grep -v "^Call" actual_putBrokenErr > kncojofiefkjn
-		mv kncojofiefkjn actual_putBrokenErr
-
 		touch expected_putBroken &&
 		printf "Error: no data or links in this node\n" > expected_putBrokenErr &&
 		test_cmp expected_putBroken actual_putBroken &&
@@ -146,10 +142,6 @@ test_object_cmd() {
 	'
 
 	test_expect_success "'ipfs object put broken.hjson' output looks good" '
-		# TODO remove this
-	 	grep -v "^Call" actual_putBrokenErr > kncojofiefkjn
-		mv kncojofiefkjn actual_putBrokenErr
-
 		touch expected_putBroken &&
 		printf "Error: no data or links in this node\n" > expected_putBrokenErr &&
 		test_cmp expected_putBroken actual_putBroken &&
