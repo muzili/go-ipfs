@@ -235,7 +235,19 @@ This command outputs data in the following encodings:
 	Type: Node{},
 	Marshalers: cmds.MarshalerMap{
 		cmds.Protobuf: func(res cmds.Response) (io.Reader, error) {
-			node := res.Output().(*Node)
+			var (
+				ch <-chan interface{}
+				ok bool
+			)
+			ch, ok = res.Output().(chan interface{})
+			if !ok {
+				ch, ok = res.Output().(<-chan interface{})
+				if !ok {
+					panic("object.get marshaler: res.Output() is not chan interface{}")
+				}
+			}
+
+			node := (<-ch).(*Node)
 			// deserialize the Data field as text as this was the standard behaviour
 			object, err := deserializeNode(node, "text")
 			if err != nil {
