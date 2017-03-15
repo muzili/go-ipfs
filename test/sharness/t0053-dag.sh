@@ -32,7 +32,8 @@ test_dag_cmd() {
 
 	test_expect_success "output looks correct" '
 		EXPHASH="zdpuAzn7KZcQmKJvpEM1DgHXaybVj7mRP4ZMrkW94taYEuZHp"
-		test $EXPHASH = $IPLDHASH
+		echo $IPLDHASH
+		test "$EXPHASH" = "$IPLDHASH"
 	'
 
 	test_expect_success "various path traversals work" '
@@ -52,7 +53,7 @@ test_dag_cmd() {
 	'
 
 	test_expect_success "after gc, objects still acessible" '
-		ipfs repo gc > /dev/null &&
+		ipfs -D repo gc > /dev/null &&
 		ipfs refs -r --timeout=2s $EXPHASH > /dev/null
 	'
 
