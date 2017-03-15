@@ -226,9 +226,12 @@ You can now refer to the added file in a gateway, like so:
 
 		go func() {
 			defer close(outChan)
-			if err := addAllAndPin(req.Files()); err != nil {
+			err := addAllAndPin(req.Files())
+			if err != nil {
 				re.SetError(err, cmdsutil.ErrNormal)
 			}
+
+			log.Debug("addAllAndPin returned ", err)
 		}()
 
 		defer re.Close()
@@ -335,6 +338,7 @@ You can now refer to the added file in a gateway, like so:
 
 			go func() {
 				defer close(outChan)
+				defer re.Close()
 
 				if e := res.Error(); e != nil {
 					re.SetError(e.Message, e.Code)
@@ -344,7 +348,6 @@ You can now refer to the added file in a gateway, like so:
 				go progressBar()
 
 				for {
-					defer re.Close()
 					v, err := res.Next()
 					log.Debug("add PostRun: next returned ", v, err)
 

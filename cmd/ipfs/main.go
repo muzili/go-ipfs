@@ -389,7 +389,9 @@ func callCommand(ctx context.Context, req cmds.Request, root *cmds.Command, cmd 
 	}
 
 	log.Debug("waiting for errCh=", errCh)
+	log.Debug("########################################################", errCh)
 	err = <-errCh
+	log.Debug("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$", errCh)
 	log.Debug("callCommands returns ", err)
 
 	// if we don't do this, an err==nil will return false because there is a concrete type

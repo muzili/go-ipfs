@@ -281,11 +281,13 @@ var swarmAddrsLocalCmd = &cmds.Command{
 			res.SetError(err, cmdsutil.ErrNormal)
 			return
 		}
+		log.Debug("swarm addrs local: got node")
 
 		if n.PeerHost == nil {
 			res.SetError(errNotOnline, cmdsutil.ErrClient)
 			return
 		}
+		log.Debug("swarm addrs local: peerhost ok")
 
 		showid, _, _ := req.Option("id").Bool()
 		id := n.Identity.Pretty()
