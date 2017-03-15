@@ -25,7 +25,8 @@ type KeyList struct {
 
 // KeyListTextMarshaler outputs a KeyList as plaintext, one key per line
 func KeyListTextMarshaler(res cmds.Response) (io.Reader, error) {
-	output := res.Output().(*KeyList)
+	out := unwrapOutput(res.Output())
+	output := out.(*KeyList)
 	buf := new(bytes.Buffer)
 	for _, key := range output.Keys {
 		buf.WriteString(key.String() + "\n")
@@ -171,29 +172,18 @@ Displays the hashes of all local objects.
 
 var refsMarshallerMap = cmds.MarshalerMap{
 	cmds.Text: func(res cmds.Response) (io.Reader, error) {
-		outChan, ok := res.Output().(<-chan interface{})
+		v := unwrapOutput(res.Output())
+
+		obj, ok := v.(*RefWrapper)
 		if !ok {
 			return nil, u.ErrCast()
 		}
 
-		marshal := func(v interface{}) (io.Reader, error) {
-			obj, ok := v.(*RefWrapper)
-			if !ok {
-				return nil, u.ErrCast()
-			}
-
-			if obj.Err != "" {
-				return nil, errors.New(obj.Err)
-			}
-
-			return strings.NewReader(obj.Ref + "\n"), nil
+		if obj.Err != "" {
+			return nil, errors.New(obj.Err)
 		}
 
-		return &cmds.ChannelMarshaler{
-			Channel:   outChan,
-			Marshaler: marshal,
-			Res:       res,
-		}, nil
+		return strings.NewReader(obj.Ref + "\n"), nil
 	},
 }
 

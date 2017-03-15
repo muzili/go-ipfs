@@ -73,7 +73,9 @@ var addPinCmd = &cmds.Command{
 	},
 	Marshalers: cmds.MarshalerMap{
 		cmds.Text: func(res cmds.Response) (io.Reader, error) {
-			added, ok := res.Output().(*PinOutput)
+			v := unwrapOutput(res.Output())
+
+			added, ok := v.(*PinOutput)
 			if !ok {
 				return nil, u.ErrCast()
 			}
@@ -135,7 +137,9 @@ collected if needed. (By default, recursively. Use -r=false for direct pins.)
 	},
 	Marshalers: cmds.MarshalerMap{
 		cmds.Text: func(res cmds.Response) (io.Reader, error) {
-			added, ok := res.Output().(*PinOutput)
+			v := unwrapOutput(res.Output())
+
+			added, ok := v.(*PinOutput)
 			if !ok {
 				return nil, u.ErrCast()
 			}
@@ -238,12 +242,14 @@ Example:
 	Type: RefKeyList{},
 	Marshalers: cmds.MarshalerMap{
 		cmds.Text: func(res cmds.Response) (io.Reader, error) {
+			v := unwrapOutput(res.Output())
+
 			quiet, _, err := res.Request().Option("quiet").Bool()
 			if err != nil {
 				return nil, err
 			}
 
-			keys, ok := res.Output().(*RefKeyList)
+			keys, ok := v.(*RefKeyList)
 			if !ok {
 				return nil, u.ErrCast()
 			}

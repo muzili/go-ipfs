@@ -66,48 +66,43 @@ order to reclaim hard disk space.
 		}
 
 		outChan := make(chan interface{})
-		res.SetOutput((<-chan interface{})(outChan))
+		res.SetOutput(outChan)
 
 		go func() {
-			defer close(outChan)
+			defer func() {
+				close(outChan)
+				log.Debug("Run.go: closing outChan")
+			}()
+
 			for k := range gcOutChan {
+				log.Debugf("Run.go.for: rx %v from gcOutChan, sending to %v", k, outChan)
 				outChan <- k
+				log.Debugf("Run.go.for: forwarded to outChan.")
 			}
 		}()
 	},
 	Type: corerepo.KeyRemoved{},
 	Marshalers: cmds.MarshalerMap{
 		cmds.Text: func(res cmds.Response) (io.Reader, error) {
-			outChan, ok := res.Output().(<-chan interface{})
-			if !ok {
-				return nil, u.ErrCast()
-			}
+			v := unwrapOutput(res.Output())
 
 			quiet, _, err := res.Request().Option("quiet").Bool()
 			if err != nil {
 				return nil, err
 			}
-
-			marshal := func(v interface{}) (io.Reader, error) {
-				obj, ok := v.(*corerepo.KeyRemoved)
-				if !ok {
-					return nil, u.ErrCast()
-				}
-
-				buf := new(bytes.Buffer)
-				if quiet {
-					buf = bytes.NewBufferString(obj.Key.String() + "\n")
-				} else {
-					buf = bytes.NewBufferString(fmt.Sprintf("removed %s\n", obj.Key))
-				}
-				return buf, nil
+			obj, ok := v.(*corerepo.KeyRemoved)
+			if !ok {
+				return nil, u.ErrCast()
 			}
 
-			return &cmds.ChannelMarshaler{
-				Channel:   outChan,
-				Marshaler: marshal,
-				Res:       res,
-			}, nil
+			buf := new(bytes.Buffer)
+			if quiet {
+				buf = bytes.NewBufferString(obj.Key.String() + "\n")
+			} else {
+				buf = bytes.NewBufferString(fmt.Sprintf("removed %s\n", obj.Key))
+			}
+
+			return buf, nil
 		},
 	},
 }

@@ -170,3 +170,18 @@ func cmdPathStrings(cmd *Command, showOptions bool) []string {
 	sort.Sort(sort.StringSlice(cmds))
 	return cmds
 }
+
+func unwrapOutput(i interface{}) interface{} {
+	var (
+		ch <-chan interface{}
+		ok bool
+	)
+
+	if ch, ok = i.(<-chan interface{}); !ok {
+		if ch, ok = i.(chan interface{}); !ok {
+			return nil
+		}
+	}
+
+	return <-ch
+}

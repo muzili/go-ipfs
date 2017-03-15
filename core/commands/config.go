@@ -119,18 +119,13 @@ Set the value of the 'Datastore.Path' key:
 				return nil, res.Error()
 			}
 
-			v := res.Output()
-			if v == nil {
-				k := res.Request().Arguments()[0]
-				return nil, fmt.Errorf("config does not contain key: %s", k)
-			}
+			v := unwrapOutput(res.Output())
 
-			ch, ok := v.(chan interface{})
-			if !ok {
+			if v == nil {
 				return nil, u.ErrCast()
 			}
 
-			vf, ok := (<-ch).(*ConfigField)
+			vf, ok := v.(*ConfigField)
 			if !ok {
 				return nil, u.ErrCast()
 			}

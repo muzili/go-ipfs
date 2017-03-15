@@ -90,7 +90,8 @@ into an object of the specified format.
 	Type: OutputObject{},
 	Marshalers: cmds.MarshalerMap{
 		cmds.Text: func(res cmds.Response) (io.Reader, error) {
-			oobj, ok := res.Output().(*OutputObject)
+			v := unwrapOutput(res.Output())
+			oobj, ok := v.(*OutputObject)
 			if !ok {
 				return nil, fmt.Errorf("expected a different object in marshaler")
 			}

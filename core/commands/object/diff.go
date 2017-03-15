@@ -110,8 +110,10 @@ Example:
 	Type: Changes{},
 	Marshalers: cmds.MarshalerMap{
 		cmds.Text: func(res cmds.Response) (io.Reader, error) {
+			v := unwrapOutput(res.Output())
+
 			verbose, _, _ := res.Request().Option("v").Bool()
-			changes := res.Output().(*Changes)
+			changes := v.(*Changes)
 			buf := new(bytes.Buffer)
 			for _, change := range changes.Changes {
 				if verbose {
